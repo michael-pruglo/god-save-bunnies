@@ -75,8 +75,8 @@ void DoublyLinkedList<T>::push_back(T elem)
     auto* it = new iterator;
     it->data = new T(elem);
 
-    tail->prev->next = it;
     it->prev = tail->prev;
+    tail->prev->next = it;
     tail->prev = it;
     it->next = tail;
 

@@ -16,23 +16,26 @@ namespace
 void ColonySimulator::run()
 {
     init();
-//    while (blist.size() > 0)
-    for (int i = 0; i < 3; ++i)
+    for (size_t turn = 1; blist.size() > 0; ++turn)
     {
-        std::cout<<"Turn #"<<i+1<<"\n"<<std::flush;
+        std::cout<<"Turn #"<<turn<<"\n"<<std::flush;
         take_turn();
-        std::cout<<"---------------------"<<"\n"<<std::flush;
-        std::cout<<blist.size()<<"  ";
+        std::cout<<"\n---------------------\n"<<std::flush;
         int r = 0;
         for (const auto& bunny: blist) std::cout<<bunny.name<<(bunny.is_radioactive?++r,"[r] ":" ");
-        std::cout<<"\n rads: "<<r<<"\n";
+        std::cout<<"\n total bunnies: "<<blist.size();
+        std::cout<<"\n rads: "<<r;
         std::cout<<"\n=======================\n\n\n"<<std::flush;
     }
 }
 
+const ColonySimulator::BunnyList& ColonySimulator::get_bunnies() const
+{
+    return blist;
+}
+
 void ColonySimulator::init()
 {
-    srand(time(nullptr));
     constexpr size_t INITIAL_POPULATION = 5;
     for (size_t i = 0; i < INITIAL_POPULATION; ++i)
         blist.push_back(BunnyBuilder::build_bunny());
@@ -40,49 +43,49 @@ void ColonySimulator::init()
 
 bool ColonySimulator::take_turn()
 {
-    size_t fertile_males = 0;
-    size_t radioactives = 0;
-
-    std::cout<<"a"<<std::flush;
-    for (auto& bunny: blist)
+    std::cout<<"aging\n"<<std::flush;
+    initiate_aging();
+    std::cout<<"radio\n"<<std::flush;
+    initiate_radioactive_massacre();
+    if (blist.size() > 1000)
     {
-        ++bunny.age;
-        if (bunny.sex==Sex::MALE && bunny_is_fertile(bunny))
-            ++fertile_males;
-        if (bunny.is_radioactive)
-            ++radioactives;
+        std::cout<<"food shortage\n"<<std::flush;
+        initiate_food_shortage();
     }
-    std::cout<<"b"<<std::flush;
+    std::cout<<"procreation\n"<<std::flush;
+    initiate_procreation();
+    std::cout<<"turn done\n"<<std::flush;
+}
 
-
-    std::vector<size_t> food_shortage_victims;
-    if (blist.size() > 30)
-        food_shortage_victims = Random::rand_sequence(0, blist.size(), blist.size()/2);
-    const auto& radioactive_victims = Random::rand_sequence(0, blist.size()-radioactives, radioactives);
-
-    std::cout<<"\nfood victims:  "; for (const auto& x: food_shortage_victims) std::cout<<x<<"  "; std::cout<<"\n";
-    std::cout<<"\nradio victims:  "; for (const auto& x: radioactive_victims) std::cout<<x<<"  "; std::cout<<"\n";
-
-    std::cout<<"c"<<std::flush;
-    size_t i = 0, non_rad_i = 0;
+void ColonySimulator::initiate_aging()
+{
     for (auto bunny = blist.begin(); bunny != blist.end(); ++bunny)
     {
-        const bool is_rad = bunny->is_radioactive;
-
-        if (bunny->sex==Sex::FEMALE && bunny_is_fertile(*bunny))
-            produce_children(*bunny, fertile_males);
-
+        ++bunny->age;
         if (bunny_is_old(*bunny))
             kill_bunny(bunny, "old age");
-        else if (contains(food_shortage_victims, i))
-            kill_bunny(bunny, "food shortage");
-        else if (!bunny->is_radioactive && contains(radioactive_victims, non_rad_i))
-            bunny->is_radioactive = true;
-
-        non_rad_i += !is_rad;
-        ++i;
     }
-    std::cout<<"d\n"<<std::flush;
+}
+
+void ColonySimulator::initiate_procreation()
+{
+    size_t fertile_males = 0;
+    for (const auto& bunny: blist)
+    {
+        if (bunny.sex==Sex::MALE && bunny_is_fertile(bunny))
+            ++fertile_males;
+    }
+    std::cout<<"\tcounted "<<fertile_males<<" fertile males\n"<<std::flush;
+    const auto this_generation_end = blist.end();
+    for (auto bunny = blist.begin(); bunny!=this_generation_end; ++bunny)
+    {
+        if (bunny->sex==Sex::FEMALE && bunny_is_fertile(*bunny))
+        {
+            std::cout<<"\t"<<bunny->name<<" produces children\n"<<std::flush;
+            produce_children(*bunny, fertile_males);
+        }
+    }
+    std::cout<<"\t procreation done.\n"<<std::flush;
 }
 
 void ColonySimulator::produce_children(const Bunny& mother, size_t count)
@@ -93,6 +96,54 @@ void ColonySimulator::produce_children(const Bunny& mother, size_t count)
         blist.push_back(child);
         //Logger::message(mother.name+" gave birth! Behold, "+child.name+" is here!");
     }
+}
+
+void ColonySimulator::initiate_food_shortage()
+{
+    size_t init_size = blist.size();
+    std::vector<size_t> food_shortage_victims;
+    food_shortage_victims = Random::rand_sequence(0, blist.size(), blist.size()/2);
+    std::cout<<"\nfood victims:  "; for (const auto& x: food_shortage_victims) std::cout<<x<<"  "; std::cout<<"\n";
+
+    size_t i = 0;
+    for (auto bunny = blist.begin(); bunny != blist.end(); ++bunny)
+    {
+        if (contains(food_shortage_victims, i))
+            kill_bunny(bunny, "food shortage");
+        ++i;
+    }
+    assert(blist.size() == init_size - init_size/2);
+}
+
+void ColonySimulator::initiate_radioactive_massacre()
+{
+    size_t radioactives = 0;
+
+    for (auto& bunny: blist)
+    {
+        if (bunny.is_radioactive)
+            ++radioactives;
+    }
+
+    size_t to_be_converted_count = std::min(radioactives, blist.size()-radioactives);
+    const auto& radioactive_victims = Random::rand_sequence(0, to_be_converted_count, to_be_converted_count);
+    std::cout<<"\tradio victims(tbcc="<<to_be_converted_count<<" s="<<blist.size()<<"r="<<radioactives<<"):  ";
+    for (const auto& x: radioactive_victims) std::cout<<x<<"  "; std::cout<<"\n";
+
+    size_t non_rad_i = 0, converts = 0;
+    for (auto& bunny: blist)
+    {
+        if (!bunny.is_radioactive)
+        {
+            if (contains(radioactive_victims, non_rad_i))
+            {
+                bunny.is_radioactive = true;
+                ++converts;
+            }
+            ++non_rad_i;
+        }
+    }
+    assert(converts == to_be_converted_count);
 }
 
 #include<sstream>
