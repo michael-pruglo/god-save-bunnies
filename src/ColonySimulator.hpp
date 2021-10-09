@@ -7,7 +7,6 @@ class ColonySimulator
 public:
     using BunnyList = DoublyLinkedList<Bunny>;
     void run();
-    const BunnyList& get_bunnies() const;
 
 private:
     void init();
