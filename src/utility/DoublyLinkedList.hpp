@@ -16,7 +16,7 @@ public:
     DoublyLinkedList();
 
     size_t size() const { return sz; }
-    iterator begin() const { return *head->next; }
+    iterator begin() const { return *head; }
     iterator end() const { return *tail; }
 
     void push_back(T elem);
@@ -39,7 +39,8 @@ struct DoublyLinkedList<T>::iterator
           T*    operator->()        { return  data; }
     const T*    operator->() const  { return  data; }
 
-    bool operator!=(const iterator& other) { return next!=other.next || prev!=other.prev; }
+    bool operator==(const iterator& other) const { return next==other.next || prev==other.prev; }
+    bool operator!=(const iterator& other) const { return !(*this==other); }
     iterator operator++()
     {
         if (next)
@@ -62,23 +63,17 @@ struct DoublyLinkedList<T>::iterator
 
 template<typename T>
 DoublyLinkedList<T>::DoublyLinkedList()
-    : head(new iterator)
-    , tail(new iterator)
 {
-    head->next = tail;
-    tail->prev = head;
+    head = tail = new iterator;
 }
 
 template<typename T>
 void DoublyLinkedList<T>::push_back(T elem)
 {
-    auto* it = new iterator;
-    it->data = new T(elem);
-
-    it->prev = tail->prev;
-    tail->prev->next = it;
-    tail->prev = it;
-    it->next = tail;
+    tail->data = new T(elem);
+    tail->next = new iterator;
+    tail->next->prev = tail;
+    tail = tail->next;
 
     ++sz;
 }
@@ -86,7 +81,7 @@ void DoublyLinkedList<T>::push_back(T elem)
 template<typename T>
 void DoublyLinkedList<T>::erase(DoublyLinkedList::iterator it)
 {
-    it.prev->next = it.next;
+    (it.prev ? it.prev->next : head) = it.next;
     it.next->prev = it.prev;
     delete it.data;
     --sz;
